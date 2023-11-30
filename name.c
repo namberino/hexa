@@ -71,6 +71,10 @@ struct editorConfig
 
 struct editorConfig E;
 
+
+/*** function prototypes ***/
+void editorSetStatusMessage(const char* fmt, ...);
+
 /*** terminal ***/
 // error handling (print out error if function returns -1)
 void die(const char* s)
@@ -432,6 +436,7 @@ void editorSave()
             {
                 close(fd);
                 free(buf);
+                editorSetStatusMessage("%d bytes written to disk", len);
                 return;
             }
         }
@@ -440,6 +445,7 @@ void editorSave()
     }
 
     free(buf);
+    editorSetStatusMessage("Save failed! I/O error: %s", strerror(errno));
 }
 
 
@@ -760,7 +766,7 @@ int main(int argc, char* argv[])
     if (argc >= 2)
         editorOpen(argv[1]);
 
-    editorSetStatusMessage("HELP: Ctrl-Q = quit");
+    editorSetStatusMessage("Help: Ctrl-S = save | Ctrl-Q = quit");
 
     while (1) 
     {
