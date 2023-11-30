@@ -7,7 +7,6 @@
 #include <termios.h>
 #include <unistd.h>
 
-
 /*** defines ***/
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define VERSION "0.0.1"
@@ -15,56 +14,33 @@
 
 
 /*** data ***/
+// append buffer
+struct abuf 
+{
+    char* b;
+    int len;
+};
 struct editorConfig 
 {
+    int cx, cy;
     int screenrows;
     int screencols;
     struct termios orig_termios;
 };
 
-// append buffer
-struct abuf 
-{
-    char *b;
-    int len;
-};
-
 struct editorConfig E;
 
-
-/*** function prototypes ***/
-void enableRawMode();
-void disableRawMode();
-void die(const char* s);
-void editorProcessKeypress();
-void editorRefreshScreen();
-int getWindowSize(int* rows, int* cols);
-void initEditor();
-char editorReadKey();
-
-
-/*** main ***/
-int main() 
-{
-    enableRawMode();
-    initEditor();
-
-    while (1) 
-    {
-        editorRefreshScreen();
-        editorProcessKeypress();
-    }
-
-    return 0;
-}
-
-void initEditor()
-{
-    if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
-}
-
-
 /*** terminal ***/
+// error handling (print out error if function returns -1)
+void die(const char *s)
+{
+    write(STDOUT_FILENO, "\x1b[2J", 4);
+    write(STDOUT_FILENO, "\x1b[H", 3); // position the cursor
+
+    perror(s);
+    exit(1);
+}
+
 void disableRawMode() 
 {
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
@@ -78,7 +54,7 @@ void enableRawMode()
 
     struct termios raw = E.orig_termios;
 
-	// ICANON turns off canonical mode (allow reading input byte by byte instead of line by line)
+    // ICANON turns off canonical mode (allow reading input byte by byte instead of line by line)
 	// ISIG turns off signals from Ctrl-C and Ctrl-Z
 	// IXON turns off signals from Ctrl-Q and Ctrl-S
 	// IEXTEN turns off signals from Ctrl-V and Ctrl-O
@@ -99,14 +75,18 @@ void enableRawMode()
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }
 
-// error handling (print out error if function returns -1)
-void die(const char* s) 
+// wait for 1 keypress, then return it. deals with low-level terminal input
+char editorReadKey() 
 {
-    write(STDOUT_FILENO, "\x1b[2J", 4);
-    write(STDOUT_FILENO, "\x1b[H", 3); // position the cursor
+    int nread;
+    char c;
+    
+    while ((nread = read(STDIN_FILENO, &c, 1)) != 1) 
+    {
+        if (nread == -1 && errno != EAGAIN) die("read");
+    }
 
-    perror(s);
-    exit(1);
+    return c;
 }
 
 int getCursorPosition(int* rows, int* cols) 
@@ -122,7 +102,6 @@ int getCursorPosition(int* rows, int* cols)
         if (buf[i] == 'R') break;
         i++;
     }
-    
     buf[i] = '\0';
 
     if (buf[0] != '\x1b' || buf[1] != '[') return -1;
@@ -136,14 +115,14 @@ int getWindowSize(int* rows, int* cols)
 {
     struct winsize ws;
 
-    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) 
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0)
     {
         if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) return -1; // fallback method for when ioctl doesn't work
 
         return getCursorPosition(rows, cols);
     } 
-    else 
-    {
+    else
+    { 
         *cols = ws.ws_col;
         *rows = ws.ws_row;
 
@@ -151,23 +130,9 @@ int getWindowSize(int* rows, int* cols)
     }
 }
 
-// wait for 1 keypress, then return it. deals with low-level terminal input
-char editorReadKey()
+void abAppend(struct abuf *ab, const char *s, int len) 
 {
-    int nread;
-    char c;
-
-    while ((nread = read(STDIN_FILENO, &c, 1)) != 1) 
-    {
-        if (nread == -1 && errno != EAGAIN) die("read");
-    }
-
-    return c;
-}
-
-void abAppend(struct abuf* ab, const char* s, int len) 
-{
-    char* new = realloc(ab->b, ab->len + len);
+    char *new = realloc(ab->b, ab->len + len);
 
     if (new == NULL) return;
 
@@ -182,47 +147,30 @@ void abFree(struct abuf* ab)
 }
 
 
-/*** input ***/
-// wait for keypress, then handle it. deals with mapping keys to editor functions at a much higher level
-void editorProcessKeypress() 
-{
-    char c = editorReadKey();
-
-    switch (c) 
-    {
-        case CTRL_KEY('q'):
-        write(STDOUT_FILENO, "\x1b[2J", 4);
-        write(STDOUT_FILENO, "\x1b[H", 3);
-        exit(0);
-        break;
-    }
-}
-
-
 /*** output ***/
 // handle drawing each row of buffer of text being edited
-void editorDrawRows(struct abuf* ab) 
+void editorDrawRows(struct abuf *ab)
 {
     int y;
-
     for (y = 0; y < E.screenrows; y++) 
     {
-        if (y == E.screenrows / 3) 
+        if (y == E.screenrows / 3)
         {
             char welcome[80];
             int welcomelen = snprintf(welcome, sizeof(welcome), "Unnamed Editor - Version %s", VERSION);
             if (welcomelen > E.screencols) welcomelen = E.screencols;
-            
+
             int padding = (E.screencols - welcomelen) / 2;
+
             if (padding) 
             {
                 abAppend(ab, "~", 1);
                 padding--;
             }
             while (padding--) abAppend(ab, " ", 1);
-            
+
             abAppend(ab, welcome, welcomelen);
-        } 
+        }
         else 
         {
             abAppend(ab, "~", 1);
@@ -247,9 +195,77 @@ void editorRefreshScreen()
 
     editorDrawRows(&ab);
 
-    abAppend(&ab, "\x1b[H", 3);
+    char buf[32];
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+    abAppend(&ab, buf, strlen(buf));
+
     abAppend(&ab, "\x1b[?25h", 6);
 
     write(STDOUT_FILENO, ab.b, ab.len);
     abFree(&ab);
+}
+
+/*** input ***/
+void editorMoveCursor(char key) 
+{
+    switch (key) 
+    {
+        case 'a':
+            E.cx--;
+            break;
+        case 'd':
+            E.cx++;
+            break;
+        case 'w':
+            E.cy--;
+            break;
+        case 's':
+            E.cy++;
+            break;
+    }
+}
+
+// wait for keypress, then handle it. deals with mapping keys to editor functions at a much higher level
+void editorProcessKeypress() 
+{
+    char c = editorReadKey();
+
+    switch (c) 
+    {
+        case CTRL_KEY('q'):
+            write(STDOUT_FILENO, "\x1b[2J", 4);
+            write(STDOUT_FILENO, "\x1b[H", 3);
+            exit(0);
+            break;
+
+        case 'w':
+        case 's':
+        case 'a':
+        case 'd':
+            editorMoveCursor(c);
+            break;
+    }
+}
+
+/*** main ***/
+void initEditor() 
+{
+    E.cx = 0;
+    E.cy = 0;
+
+    if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
+}
+
+int main() 
+{
+    enableRawMode();
+    initEditor();
+
+    while (1) 
+    {
+        editorRefreshScreen();
+        editorProcessKeypress();
+    }
+
+    return 0;
 }
