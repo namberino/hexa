@@ -411,6 +411,10 @@ void editorOpen(char* filename)
   ftruncate() sets the file’s size to the specified length. 
   If the file is larger than that, it will cut off any data at the end of the file to make it that length. 
   If the file is shorter, it will add 0 bytes at the end to make it that length.
+
+  open() and ftruncate() both return -1 on error.
+  We expect write() to return the number of bytes we told it to write. 
+  Whether or not an error occurred, we ensure that the file is closed and the memory that buf points to is freed.
 */
 void editorSave()
 {
@@ -418,11 +422,23 @@ void editorSave()
 
     int len;
     char* buf = editorRowsToString(&len);
-    int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
+    int fd = open(E.filename, O_RDWR | O_CREAT, 0644); // 0644: the standard permissions for text file
     
-    ftruncate(fd, len);
-    write(fd, buf, len);
-    close(fd);
+    if (fd != -1) 
+    {
+        if (ftruncate(fd, len) != -1) 
+        {
+            if (write(fd, buf, len) == len) 
+            {
+                close(fd);
+                free(buf);
+                return;
+            }
+        }
+        
+        close(fd);
+    }
+
     free(buf);
 }
 
