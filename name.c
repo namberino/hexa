@@ -20,6 +20,7 @@
 #define VERSION "0.0.1"
 #define ABUF_INIT {NULL, 0}
 #define TAB_STOP 8
+#define QUIT_TIMES 1
 
 // 1000: out of range of char so they don't conflict with normal keypress
 enum editorKey 
@@ -677,6 +678,9 @@ void editorMoveCursor(int key)
 // wait for keypress, then handle it. deals with mapping keys to editor functions at a much higher level
 void editorProcessKeypress() 
 {
+    // We use a static variable in editorProcessKeypress() to keep track of how many more times the user must press Ctrl-Q to quit
+    static int quit_times = QUIT_TIMES;
+
     int c = editorReadKey();
 
     switch (c) 
@@ -692,6 +696,13 @@ void editorProcessKeypress()
             break;
 
         case CTRL_KEY('q'):
+            if (E.dirty && quit_times > 0)
+            {
+                editorSetStatusMessage("WARNING! File has unsaved changes. Press Ctrl-Q again to quit.");
+                quit_times--; // When quit_times hits 0, the program to exits
+
+                return;
+            }
             write(STDOUT_FILENO, "\x1b[2J", 4);
             write(STDOUT_FILENO, "\x1b[H", 3);
             exit(0);
@@ -745,6 +756,8 @@ void editorProcessKeypress()
             editorInsertChar(c);
             break;
     }
+
+    quit_times = QUIT_TIMES;
 }
 
 /*** main ***/
