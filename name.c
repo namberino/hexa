@@ -504,6 +504,16 @@ void editorProcessKeypress()
         case PAGE_UP:
         case PAGE_DOWN:
             {
+                if (c == PAGE_UP)
+                {
+                    E.cy = E.rowoff;
+                } 
+                else if (c == PAGE_DOWN)
+                {
+                    E.cy = E.rowoff + E.screenrows - 1;
+                    if (E.cy > E.numrows) E.cy = E.numrows;
+                }
+
                 int times = E.screenrows; // how many times to move
 
                 while (times--)
