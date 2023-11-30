@@ -253,7 +253,7 @@ void abFree(struct abuf* ab)
 // use rx % TAB_STOP to find out how many columns we are to the right of the last tab stop
 // then subtract that from TAB_STOP - 1 to find out how many columns we are to the left of the next tab stop
 // add that amount to rx to get just to the left of the next tab stop, and then the unconditional rx++ statement gets us right on the next tab stop
-int editorRowCxToRx(erow* row, int cx)
+int editorRowCxToRx(erow* row, int cx) // basically a function for working with lines with tabs in them
 {
     int rx = 0;
     int j;
@@ -297,11 +297,15 @@ void editorUpdateRow(erow* row)
     row->rsize = idx;
 }
 
-void editorAppendRow(char* s, size_t len)
+// First validate 'at', then allocate memory for one more erow, and use memmove() to make room at the specified index for the new row.
+void editorInsertRow(int at, char* s, size_t len)
 {
-    E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+    if (at < 0 || at > E.numrows) return;
 
-    int at = E.numrows; // set to index of new row to initialize
+    E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+    memmove(&E.row[at + 1], &E.row[at], sizeof(erow) * (E.numrows - at));
+
+    // int at = E.numrows; // set to index of new row to initialize
 
     E.row[at].size = len;
     E.row[at].chars = malloc(len + 1);
@@ -392,10 +396,40 @@ void editorRowDelChar(erow* row, int at)
 void editorInsertChar(int c)
 {
     if (E.cy == E.numrows)
-        editorAppendRow("", 0);
+        editorInsertRow(E.numrows, "", 0);
 
     editorRowInsertChar(&E.row[E.cy], E.cx, c);
     E.cx++;
+}
+
+/*
+  If we’re at the beginning of a line, all we have to do is insert a new blank row before the line we’re on.
+  Otherwise, we have to split the line we’re on into two rows.
+  First we call editorInsertRow() and pass it the characters on the current row that are to the right of the cursor.
+  That creates a new row after the current one, with the correct contents.
+  Then we reassign the row pointer, because editorInsertRow() calls realloc(), which might move memory around on us and invalidate the pointer.
+  Then we truncate the current row’s contents by setting its size to the position of the cursor, and we call editorUpdateRow() on the truncated row.
+
+  In both cases, we increment E.cy, and set E.cx to 0 to move the cursor to the beginning of the row
+*/
+void editorInsertNewline()
+{
+    if (E.cx == 0)
+    {
+        editorInsertRow(E.cy, "", 0);
+    } 
+    else
+    {
+        erow* row = &E.row[E.cy];
+        editorInsertRow(E.cy + 1, &row->chars[E.cx], row->size - E.cx);
+        row = &E.row[E.cy];
+        row->size = E.cx;
+        row->chars[row->size] = '\0';
+        editorUpdateRow(row);
+    }
+
+    E.cy++;
+    E.cx = 0;
 }
 
 /*
@@ -485,7 +519,7 @@ void editorOpen(char* filename)
         while (linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
             linelen--;
 
-        editorAppendRow(line, linelen);
+        editorInsertRow(E.numrows, line, linelen);
     }
 
     free(line);
@@ -769,7 +803,7 @@ void editorProcessKeypress()
     switch (c) 
     {
         case '\r': // enter key
-            /* TODO */
+            editorInsertNewline();
             break;
 
         case BACKSPACE:
