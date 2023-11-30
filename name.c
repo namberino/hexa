@@ -12,12 +12,13 @@
 #define VERSION "0.0.1"
 #define ABUF_INIT {NULL, 0}
 
+// 1000: out of range of char so they don't conflict with normal keypress
 enum editorKey 
 {
-    ARROW_LEFT = 'a',
-    ARROW_RIGHT = 'd',
-    ARROW_UP = 'w',
-    ARROW_DOWN = 's'
+    ARROW_LEFT = 1000,
+    ARROW_RIGHT = 1001,
+    ARROW_UP = 1002,
+    ARROW_DOWN = 1003
 };
 
 
@@ -84,7 +85,7 @@ void enableRawMode()
 }
 
 // wait for 1 keypress, then return it. deals with low-level terminal input
-char editorReadKey() 
+int editorReadKey()
 {
     int nread;
     char c;
@@ -238,7 +239,7 @@ void editorRefreshScreen()
 }
 
 /*** input ***/
-void editorMoveCursor(char key) 
+void editorMoveCursor(int key)
 {
     switch (key) 
     {
@@ -260,7 +261,7 @@ void editorMoveCursor(char key)
 // wait for keypress, then handle it. deals with mapping keys to editor functions at a much higher level
 void editorProcessKeypress() 
 {
-    char c = editorReadKey();
+    int c = editorReadKey();
 
     switch (c) 
     {
