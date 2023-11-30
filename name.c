@@ -369,6 +369,11 @@ void editorRefreshScreen()
 /*** input ***/
 void editorMoveCursor(int key)
 {
+    // check if cursor is on the line
+    // If it is, then the row variable will point to the erow that the cursor is on, 
+    // and we’ll check whether E.cx is to the left of the end of that line before we allow the cursor to move to the right
+    erow* row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy]; // for limiting scrolling past the end of the current line
+
     switch (key) 
     {
         case ARROW_LEFT:
@@ -376,7 +381,8 @@ void editorMoveCursor(int key)
                 E.cx--;
             break;
         case ARROW_RIGHT:
-            E.cx++;
+            if (row && E.cx < row->size) // limiting scrolling past the end of the current line
+                E.cx++;
             break;
         case ARROW_UP:
             if (E.cy != 0)
