@@ -393,6 +393,14 @@ void editorMoveCursor(int key)
                 E.cy++;
             break;
     }
+
+    // set row again, since E.cy could point to a different line than it did before
+    // set E.cx to the end of that line if E.cx is to the right of the end of that line
+    row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
+    int rowlen = row ? row->size : 0;
+
+    if (E.cx > rowlen)
+        E.cx = rowlen;
 }
 
 // wait for keypress, then handle it. deals with mapping keys to editor functions at a much higher level
