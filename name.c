@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <termios.h>
 #include <sys/ioctl.h>
@@ -9,6 +10,7 @@
 
 /*** defines ***/
 #define CTRL_KEY(k) ((k) & 0x1f) // sets the upper 3 bits of the character to 0, which mirrors what the Ctrl key does in the terminal
+#define ABUF_INIT {NULL, 0}
 
 
 /*** data ***/
@@ -19,6 +21,13 @@ struct editorConfig // contains editor state
 	int scrn_rows;
 	int scrn_cols;
 	struct termios orig_termios;	
+};
+
+// append buffer
+struct abuf 
+{
+	char* b;
+	int len;
 };
 
 struct editorConfig E;
@@ -158,6 +167,22 @@ char editorReadKey()
 	return c;
 }
 
+void abAppend(struct abuf* ab, const char* s, int len)
+{
+	char* new = realloc(ab->b, ab->len + len);
+
+	if (new == NULL) return;
+
+	memcpy(&new[ab->len], s, len);
+	ab->b = new;
+	ab->len += len;
+}
+
+void abFree(struct abuf* ab)
+{
+	free(ab->b);
+}
+
 
 /*** input ***/
 // wait for keypress, then handle it. deals with mapping keys to editor functions at a much higher level
@@ -178,12 +203,13 @@ void editorProcessKeypress()
 
 /*** output ***/
 // handle drawing each row of buffer of text being edited
-void editorDrawRows()
+void editorDrawRows(struct abuf* ab)
 {
 	for (int y = 0; y < E.scrn_rows; y++)
 	{
-		write(STDOUT_FILENO, "~", 1);
-    
+		abAppend(ab, "~", 1);
+		abAppend(ab, "\x1b[K", 3);
+
 		if (y < E.scrn_rows - 1) 
 			write(STDOUT_FILENO, "\r\n", 2);
 	}
@@ -192,10 +218,16 @@ void editorDrawRows()
 // writing an escape sequence to the terminal
 void editorRefreshScreen()
 {
-	write(STDOUT_FILENO, "\x1b[2J", 4);
-	write(STDOUT_FILENO, "\x1b[H", 3); // position the cursor
-
-	editorDrawRows();
-
-	write(STDOUT_FILENO, "\x1b[H", 3);
+	struct abuf ab = ABUF_INIT;
+  
+	abAppend(&ab, "\x1b[?25l", 6);
+	abAppend(&ab, "\x1b[H", 3);
+  
+	editorDrawRows(&ab);
+  
+	abAppend(&ab, "\x1b[H", 3);
+	abAppend(&ab, "\x1b[?25h", 6);
+  
+	write(STDOUT_FILENO, ab.b, ab.len);
+	abFree(&ab);
 }
