@@ -16,6 +16,7 @@
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define VERSION "0.0.1"
 #define ABUF_INIT {NULL, 0}
+#define TAB_STOP 8
 
 // 1000: out of range of char so they don't conflict with normal keypress
 enum editorKey 
@@ -51,6 +52,7 @@ struct abuf
 struct editorConfig 
 {
     int cx, cy;
+    int rx; // horizontal coordinate (index of render field as oppose to cx which is index of the chars field of erow)
     int rowoff; // vertical scroll offset
     int coloff; // horizontal scroll offset
     int screenrows;
@@ -234,6 +236,25 @@ void abFree(struct abuf* ab)
 }
 
 /*** row operations ***/
+// converts a chars index into a render index (looping through all the characters to the left of cx, and figure out how many spaces each tab takes up)
+// use rx % TAB_STOP to find out how many columns we are to the right of the last tab stop
+// then subtract that from TAB_STOP - 1 to find out how many columns we are to the left of the next tab stop
+// add that amount to rx to get just to the left of the next tab stop, and then the unconditional rx++ statement gets us right on the next tab stop
+int editorRowCxToRx(erow* row, int cx)
+{
+    int rx = 0;
+    int j;
+
+    for (j = 0; j < cx; j++) 
+    {
+        if (row->chars[j] == '\t')
+            rx += (TAB_STOP - 1) - (rx % TAB_STOP);
+        rx++;
+    }
+
+    return rx;
+}
+
 void editorUpdateRow(erow* row)
 {
     int tabs = 0;
@@ -244,14 +265,14 @@ void editorUpdateRow(erow* row)
         if (row->chars[j] == '\t') tabs++;
   
     free(row->render);
-    row->render = malloc(row->size + tabs * 7 + 1);
+    row->render = malloc(row->size + tabs * (TAB_STOP - 1) + 1);
     
     for (j = 0; j < row->size; j++) 
     {
         if (row->chars[j] == '\t') 
         {
             row->render[idx++] = ' ';
-            while (idx % 8 != 0) row->render[idx++] = ' ';
+            while (idx % TAB_STOP != 0) row->render[idx++] = ' ';
         } 
         else
         {
@@ -310,7 +331,13 @@ void editorOpen(char* filename)
 
 /*** output ***/
 // check if cursor moved outside of screen, if so, adjust E.rowoff so that cursor is inside visible window
-void editorScroll() {
+void editorScroll() 
+{
+    E.rx = E.cx;
+
+    if (E.cy < E.numrows)
+        E.rx = editorRowCxToRx(&E.row[E.cy], E.cx);
+
     // check if cursor is above the visible window
     if (E.cy < E.rowoff)
         E.rowoff = E.cy;
@@ -320,12 +347,12 @@ void editorScroll() {
         E.rowoff = E.cy - E.screenrows + 1; // since E.rowoff refers to top of the screen
 
     // check if cursor is to the left of the visible window
-    if (E.cx < E.coloff)
-        E.coloff = E.cx;
+    if (E.rx < E.coloff)
+        E.coloff = E.rx;
 
     // check if cursor is to the right of the visible window
-    if (E.cx >= E.coloff + E.screencols)
-        E.coloff = E.cx - E.screencols + 1;
+    if (E.rx >= E.coloff + E.screencols)
+        E.coloff = E.rx - E.screencols + 1;
 }
 
 // handle drawing each row of buffer of text being edited
@@ -392,7 +419,7 @@ void editorRefreshScreen()
     editorDrawRows(&ab);
 
     char buf[32];
-    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, (E.cx - E.coloff) + 1); // reposition the cursor by subtracting rowoff with cy and coloff with cx
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, (E.rx - E.coloff) + 1); // reposition the cursor by subtracting rowoff with cy and coloff with cx
     abAppend(&ab, buf, strlen(buf));
 
     abAppend(&ab, "\x1b[?25h", 6);
@@ -498,6 +525,7 @@ void initEditor()
 {
     E.cx = 0;
     E.cy = 0;
+    E.rx = 0;
     E.rowoff = 0;
     E.coloff = 0;
     E.numrows = 0;
