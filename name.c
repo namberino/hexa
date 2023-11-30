@@ -49,7 +49,8 @@ struct abuf
 struct editorConfig 
 {
     int cx, cy;
-    int rowoff; // scroll offset
+    int rowoff; // vertical scroll offset
+    int coloff; // horizontal scroll offset
     int screenrows;
     int screencols;
     int numrows;
@@ -282,6 +283,14 @@ void editorScroll() {
     // check if cursor is past the bottom of the visible window
     if (E.cy >= E.rowoff + E.screenrows)
         E.rowoff = E.cy - E.screenrows + 1; // since E.rowoff refers to top of the screen
+
+    // check if cursor is to the left of the visible window
+    if (E.cx < E.coloff)
+        E.coloff = E.cx;
+
+    // check if cursor is to the right of the visible window
+    if (E.cx >= E.coloff + E.screencols)
+        E.coloff = E.cx - E.screencols + 1;
 }
 
 // handle drawing each row of buffer of text being edited
@@ -319,9 +328,11 @@ void editorDrawRows(struct abuf* ab)
         }
         else 
         {
-            int len = E.row[filerow].size;
+            // subtract the number of characters that are to the left of the offset from the length of the row
+            int len = E.row[filerow].size - E.coloff;
+            if (len < 0) len = 0;
             if (len > E.screencols) len = E.screencols;
-            abAppend(ab, E.row[filerow].chars, len);
+            abAppend(ab, &E.row[filerow].chars[E.coloff], len);
         }
 
         abAppend(ab, "\x1b[K", 3);
@@ -365,8 +376,7 @@ void editorMoveCursor(int key)
                 E.cx--;
             break;
         case ARROW_RIGHT:
-            if (E.cx != E.screencols - 1)
-                E.cx++;
+            E.cx++;
             break;
         case ARROW_UP:
             if (E.cy != 0)
@@ -425,6 +435,7 @@ void initEditor()
     E.cx = 0;
     E.cy = 0;
     E.rowoff = 0;
+    E.coloff = 0;
     E.numrows = 0;
     E.row = NULL;
 
