@@ -19,8 +19,10 @@ enum editorKey
     ARROW_RIGHT = 1001,
     ARROW_UP = 1002,
     ARROW_DOWN = 1003,
-    PAGE_UP = 1004,
-    PAGE_DOWN = 1005
+    HOME_KEY = 1004,
+    END_KEY = 1005,
+    PAGE_UP = 1006,
+    PAGE_DOWN = 1007
 };
 
 
@@ -112,10 +114,15 @@ int editorReadKey()
 
                 if (seq[2] == '~') 
                 {
+                    // reading the escape sequence
                     switch (seq[1]) 
                     {
+                        case '1': return HOME_KEY;
+                        case '4': return END_KEY;
                         case '5': return PAGE_UP;
                         case '6': return PAGE_DOWN;
+                        case '7': return HOME_KEY;
+                        case '8': return END_KEY;
                     }
                 }
             }
@@ -127,7 +134,17 @@ int editorReadKey()
                     case 'B': return ARROW_DOWN;
                     case 'C': return ARROW_RIGHT;
                     case 'D': return ARROW_LEFT;
+                    case 'H': return HOME_KEY;
+                    case 'F': return END_KEY;
                 }
+            }
+        }
+        else if (seq[0] == 'O')
+        {
+            switch (seq[1])
+            {
+                case 'H': return HOME_KEY;
+                case 'F': return END_KEY;
             }
         }
 
@@ -291,6 +308,13 @@ void editorProcessKeypress()
             write(STDOUT_FILENO, "\x1b[2J", 4);
             write(STDOUT_FILENO, "\x1b[H", 3);
             exit(0);
+            break;
+
+        case HOME_KEY:
+            E.cx = 0;
+            break;
+        case END_KEY:
+            E.cx = E.screencols - 1;
             break;
 
         // move to either the beginning or the end of the screen
