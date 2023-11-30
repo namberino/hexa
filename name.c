@@ -240,7 +240,7 @@ void abFree(struct abuf* ab)
     free(ab->b);
 }
 
-/*** row operations ***/
+/*** row operations (no worries about where the cursor is) ***/
 // converts a chars index into a render index (looping through all the characters to the left of cx, and figure out how many spaces each tab takes up)
 // use rx % TAB_STOP to find out how many columns we are to the right of the last tab stop
 // then subtract that from TAB_STOP - 1 to find out how many columns we are to the left of the next tab stop
@@ -306,6 +306,36 @@ void editorAppendRow(char* s, size_t len)
     editorUpdateRow(&E.row[at]);
 
     E.numrows++;
+}
+
+// inserts a single character into an erow at a given position
+void editorRowInsertChar(erow* row, int at, int c) 
+{
+    if (at < 0 || at > row->size) at = row->size;
+    row->chars = realloc(row->chars, row->size + 2);
+
+    memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
+
+    row->size++;
+    row->chars[at] = c;
+    
+    editorUpdateRow(row);
+}
+
+
+/*** editor operations (no worries about details of modifying an erow) ***/
+/*
+  If E.cy == E.numrows, then the cursor is on the tilde line after the end of the file,
+  so we need to append a new row to the file before inserting a character there.
+  After inserting a character, we move the cursor forward so that the next character the user inserts will go after the character just inserted.
+*/
+void editorInsertChar(int c)
+{
+    if (E.cy == E.numrows)
+        editorAppendRow("", 0);
+
+    editorRowInsertChar(&E.row[E.cy], E.cx, c);
+    E.cx++;
 }
 
 
@@ -604,6 +634,10 @@ void editorProcessKeypress()
         case ARROW_LEFT:
         case ARROW_RIGHT:
             editorMoveCursor(c);
+            break;
+
+        default:
+            editorInsertChar(c);
             break;
     }
 }
