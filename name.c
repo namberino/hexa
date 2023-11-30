@@ -18,6 +18,8 @@ struct termios orig_termios;
 void enableRawMode();
 void disableRawMode();
 void die(const char* s);
+void editorProcessKeypress();
+void editorRefreshScreen();
 
 
 /*** main ***/
@@ -27,15 +29,8 @@ int main()
 
 	while (1)
 	{
-		char c = '\0';
-		if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
-
-		if (iscntrl(c)) // check for control characters
-			printf("%d\r\n", c);
-		else
-			printf("%d ('%c')\r\n", c, c);
-
-		if (c == CTRL_KEY('q')) break;
+		editorRefreshScreen();
+		editorProcessKeypress();
 	}
 
 	return 0;
@@ -80,6 +75,47 @@ void enableRawMode()
 // error handling (print out error if function returns -1)
 void die(const char* s)
 {
+	write(STDOUT_FILENO, "\x1b[2J", 4);
+	write(STDOUT_FILENO, "\x1b[H", 3); // position the cursor
+
 	perror(s);
 	exit(1);
+}
+
+// wait for 1 keypress, then return it. deals with low-level terminal input
+char editorReadKey()
+{
+	int nread;
+	char c;
+
+	while ((nread = read(STDIN_FILENO, &c, 1)) != 1)
+	{
+		if (nread == -1 && errno != EAGAIN) die("read");
+	}
+
+	return c;
+}
+
+
+/*** input ***/
+// wait for keypress, then handle it. deals with mapping keys to editor functions at a much higher level
+void editorProcessKeypress()
+{
+	char c = editorReadKey();
+
+	switch (c) 
+	{
+		case CTRL_KEY('q'):
+			exit(0);
+			break;
+	}
+}
+
+
+/*** output ***/
+// writing an escape sequence to the terminal
+void editorRefreshScreen()
+{
+	write(STDOUT_FILENO, "\x1b[2J", 4);
+	write(STDOUT_FILENO, "\x1b[H", 3); // position the cursor
 }
