@@ -11,6 +11,7 @@
 /*** defines ***/
 #define CTRL_KEY(k) ((k) & 0x1f) // sets the upper 3 bits of the character to 0, which mirrors what the Ctrl key does in the terminal
 #define ABUF_INIT {NULL, 0}
+#define VERSION "0.0.1"
 
 
 /*** data ***/
@@ -207,7 +208,17 @@ void editorDrawRows(struct abuf* ab)
 {
 	for (int y = 0; y < E.scrn_rows; y++)
 	{
-		abAppend(ab, "~", 1);
+		if (y == E.scrn_rows / 3)
+		{
+			char welcome[80];
+			int welcome_len = snprintf(welcome, sizeof(welcome), "Unnamed Editor - Version %s", VERSION);
+
+			if (welcome_len > E.scrn_cols) welcome_len = E.scrn_cols;
+			abAppend(ab, welcome, welcome_len);
+		}
+		else
+			abAppend(ab, "~", 1);
+
 		abAppend(ab, "\x1b[K", 3);
 
 		if (y < E.scrn_rows - 1) 
