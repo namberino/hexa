@@ -11,6 +11,8 @@
 #include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
+#include <time.h>
+#include <stdarg.h>
 
 /*** defines ***/
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -60,6 +62,8 @@ struct editorConfig
     int numrows;
     erow* row; // array for storing multiple lines
     char* filename;
+    char statusmsg[80];
+    time_t statusmsg_time; // contain the timestamp when we set a status message 
     struct termios orig_termios;
 };
 
@@ -469,6 +473,21 @@ void editorRefreshScreen()
     abFree(&ab);
 }
 
+/*
+  Store the resulting string in E.statusmsg, and set E.statusmsg_time to the current time, which can be gotten by passing NULL to time()
+  We pass fmt and ap to vsnprintf() and it takes care of reading the format string and calling va_arg() to get each argument
+*/
+void editorSetStatusMessage(const char* fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(E.statusmsg, sizeof(E.statusmsg), fmt, ap); // help us make our own printf()-style function
+    va_end(ap);
+
+    E.statusmsg_time = time(NULL);
+}
+
 /*** input ***/
 void editorMoveCursor(int key)
 {
@@ -583,6 +602,8 @@ void initEditor()
     E.numrows = 0;
     E.row = NULL;
     E.filename = NULL;
+    E.statusmsg[0] = '\0';
+    E.statusmsg_time = 0;
 
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
     E.screenrows -= 1; // so that editorDrawRows() doesn’t try to draw a line of text at the bottom of the screen
@@ -594,6 +615,8 @@ int main(int argc, char* argv[])
     initEditor();
     if (argc >= 2)
         editorOpen(argv[1]);
+
+    editorSetStatusMessage("HELP: Ctrl-Q = quit");
 
     while (1) 
     {
