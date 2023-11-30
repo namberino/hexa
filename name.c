@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <stdarg.h>
+#include <fcntl.h>
 
 /*** defines ***/
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -23,6 +24,7 @@
 // 1000: out of range of char so they don't conflict with normal keypress
 enum editorKey 
 {
+    BACKSPACE = 127,
     ARROW_LEFT = 1000,
     ARROW_RIGHT = 1001,
     ARROW_UP = 1002,
@@ -340,6 +342,38 @@ void editorInsertChar(int c)
 
 
 /*** file IO ***/
+/*
+  First we add up the lengths of each row of text, adding 1 to each one for the newline character we’ll add to the end of each line.
+  We save the total length into buflen, to tell the caller how long the string is.
+  
+  Then, after allocating the required memory, we loop through the rows, and memcpy() the contents of each row to the end of the buffer,
+  appending a newline character after each row.
+
+  We return buf, expecting the caller to free() the memory.
+*/
+char* editorRowsToString(int* buflen)
+{
+    int totlen = 0;
+    int j;
+
+    for (j = 0; j < E.numrows; j++)
+        totlen += E.row[j].size + 1;
+
+    *buflen = totlen;
+    char* buf = malloc(totlen);
+    char* p = buf;
+
+    for (j = 0; j < E.numrows; j++)
+    {
+        memcpy(p, E.row[j].chars, E.row[j].size);
+        p += E.row[j].size;
+        *p = '\n';
+        p++;
+    }
+    
+    return buf;
+}
+
 // for opening and reading file from disk
 void editorOpen(char* filename)
 {
@@ -365,6 +399,31 @@ void editorOpen(char* filename)
 
     free(line);
     fclose(fp);
+}
+
+/*
+  New file: return for now (COME BACK LATER)
+  else: 
+  Call editorRowsToString(), and write() the string to the path in E.filename.
+  Tell open() we want to create a new file if it doesn’t already exist (O_CREAT), and we want to open it for reading and writing (O_RDWR).
+  Because we used the O_CREAT flag, we have to pass an extra argument containing the mode (the permissions) the new file should have
+
+  ftruncate() sets the file’s size to the specified length. 
+  If the file is larger than that, it will cut off any data at the end of the file to make it that length. 
+  If the file is shorter, it will add 0 bytes at the end to make it that length.
+*/
+void editorSave()
+{
+    if (E.filename == NULL) return;
+
+    int len;
+    char* buf = editorRowsToString(&len);
+    int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
+    
+    ftruncate(fd, len);
+    write(fd, buf, len);
+    close(fd);
+    free(buf);
 }
 
 
@@ -594,10 +653,24 @@ void editorProcessKeypress()
 
     switch (c) 
     {
+        case '\r': // enter key
+            /* TODO */
+            break;
+
+        case BACKSPACE:
+        case CTRL_KEY('h'):
+        case DEL_KEY:
+            /* TODO */
+            break;
+
         case CTRL_KEY('q'):
             write(STDOUT_FILENO, "\x1b[2J", 4);
             write(STDOUT_FILENO, "\x1b[H", 3);
             exit(0);
+            break;
+
+        case CTRL_KEY('s'):
+            editorSave();
             break;
 
         case HOME_KEY:
@@ -634,6 +707,10 @@ void editorProcessKeypress()
         case ARROW_LEFT:
         case ARROW_RIGHT:
             editorMoveCursor(c);
+            break;
+
+        case CTRL_KEY('l'):
+        case '\x1b': // escape key
             break;
 
         default:
