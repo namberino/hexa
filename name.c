@@ -7,19 +7,16 @@
 
 
 /*** data ***/
-
 struct termios orig_termios;
 
 
 /*** function prototypes ***/
-
 void enableRawMode();
 void disableRawMode();
 void die(const char* s);
 
 
 /*** main ***/
-
 int main()
 {
 	enableRawMode();	
@@ -42,7 +39,6 @@ int main()
 
 
 /*** terminal ***/
-
 void disableRawMode()
 {
 	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1)
