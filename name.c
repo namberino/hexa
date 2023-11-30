@@ -399,11 +399,24 @@ void editorDrawRows(struct abuf* ab)
 
         abAppend(ab, "\x1b[K", 3);
 
-        if (y < E.screenrows - 1) 
-        {
-            abAppend(ab, "\r\n", 2);
-        }
+        abAppend(ab, "\r\n", 2);
     }
+}
+
+// escape sequence '[7m' switches to inverted colors, '[m' switches back to normal formatting
+void editorDrawStatusBar(struct abuf* ab)
+{
+    abAppend(ab, "\x1b[7m", 4);
+
+    int len = 0;
+
+    while (len < E.screencols)
+    {
+        abAppend(ab, " ", 1);
+        len++;
+    }
+    
+    abAppend(ab, "\x1b[m", 3);
 }
 
 // writing an escape sequence to the terminal
@@ -417,6 +430,7 @@ void editorRefreshScreen()
     abAppend(&ab, "\x1b[H", 3);
 
     editorDrawRows(&ab);
+    editorDrawStatusBar(&ab);
 
     char buf[32];
     snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, (E.rx - E.coloff) + 1); // reposition the cursor by subtracting rowoff with cy and coloff with cx
@@ -543,6 +557,7 @@ void initEditor()
     E.row = NULL;
 
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
+    E.screenrows -= 1; // so that editorDrawRows() doesn’t try to draw a line of text at the bottom of the screen
 }
 
 int main(int argc, char* argv[]) 
