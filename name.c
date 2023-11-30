@@ -332,6 +332,18 @@ void editorRowInsertChar(erow* row, int at, int c)
     E.dirty++;
 }
 
+// use memmove() to overwrite the deleted character with the characters that come after it
+void editorRowDelChar(erow* row, int at)
+{
+    if (at < 0 || at >= row->size) return;
+    memmove(&row->chars[at], &row->chars[at + 1], row->size - at);
+
+    row->size--;
+
+    editorUpdateRow(row);
+    E.dirty++;
+}
+
 
 /*** editor operations (no worries about details of modifying an erow) ***/
 /*
@@ -346,6 +358,23 @@ void editorInsertChar(int c)
 
     editorRowInsertChar(&E.row[E.cy], E.cx, c);
     E.cx++;
+}
+
+/*
+  If the cursor’s past the end of the file, then there is nothing to delete, and we return
+  Otherwise, we get the erow the cursor is on, and if there is a character to the left of the cursor,
+  we delete it and move the cursor one to the left.
+*/
+void editorDelChar() 
+{
+    if (E.cy == E.numrows) return;
+    erow* row = &E.row[E.cy];
+
+    if (E.cx > 0) 
+    {
+        editorRowDelChar(row, E.cx - 1);
+        E.cx--;
+    }
 }
 
 
@@ -692,7 +721,8 @@ void editorProcessKeypress()
         case BACKSPACE:
         case CTRL_KEY('h'):
         case DEL_KEY:
-            /* TODO */
+            if (c == DEL_KEY) editorMoveCursor(ARROW_RIGHT);
+            editorDelChar();
             break;
 
         case CTRL_KEY('q'):
