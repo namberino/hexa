@@ -317,6 +317,28 @@ void editorAppendRow(char* s, size_t len)
     E.dirty++;
 }
 
+// free memory owned by the erow being deleted 
+/*
+  First we validate the at index. 
+  Then we free the memory owned by the row using editorFreeRow(). 
+  We then use memmove() to overwrite the deleted row struct with the rest of the rows that come after it, and decrement numrows.
+*/
+void editorFreeRow(erow* row)
+{
+    free(row->render);
+    free(row->chars);
+}
+
+void editorDelRow(int at) 
+{
+    if (at < 0 || at >= E.numrows) return;
+    editorFreeRow(&E.row[at]);
+    memmove(&E.row[at], &E.row[at + 1], sizeof(erow) * (E.numrows - at - 1));
+
+    E.numrows--;
+    E.dirty++;
+}
+
 // inserts a single character into an erow at a given position
 void editorRowInsertChar(erow* row, int at, int c) 
 {
@@ -328,6 +350,22 @@ void editorRowInsertChar(erow* row, int at, int c)
     row->size++;
     row->chars[at] = c;
     
+    editorUpdateRow(row);
+    E.dirty++;
+}
+
+// appends string to the end of a row
+/*
+  The row’s new size is row->size + len + 1 (including the null byte), so first we allocate that much memory for row->chars.
+  Then we simply memcpy() the given string to the end of the contents of row->chars.
+  We update row->size, call editorUpdateRow() as usual
+*/
+void editorRowAppendString(erow* row, char* s, size_t len)
+{
+    row->chars = realloc(row->chars, row->size + len + 1);
+    memcpy(&row->chars[row->size], s, len);
+    row->size += len;
+    row->chars[row->size] = '\0';
     editorUpdateRow(row);
     E.dirty++;
 }
@@ -368,12 +406,28 @@ void editorInsertChar(int c)
 void editorDelChar() 
 {
     if (E.cy == E.numrows) return;
+    if (E.cx == 0 && E.cy == 0) return;
+
     erow* row = &E.row[E.cy];
 
     if (E.cx > 0) 
     {
         editorRowDelChar(row, E.cx - 1);
         E.cx--;
+    }
+    else
+    {
+        /*
+          If the cursor is at the beginning of the first line, then there’s nothing to do, so we return immediately.
+          Otherwise, if we find that E.cx == 0, we call editorRowAppendString() and then editorDelRow() as we planned.
+          row points to the row we are deleting, so we append row->chars to the previous row, and then delete the row that E.cy is on.
+          We set E.cx to the end of the contents of the previous row before appending to that row.
+          That way, the cursor will end up at the point where the two lines joined
+        */
+        E.cx = E.row[E.cy - 1].size;
+        editorRowAppendString(&E.row[E.cy - 1], row->chars, row->size);
+        editorDelRow(E.cy);
+        E.cy--;
     }
 }
 
