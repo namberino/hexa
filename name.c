@@ -49,6 +49,7 @@ struct abuf
 struct editorConfig 
 {
     int cx, cy;
+    int rowoff; // scroll offset
     int screenrows;
     int screencols;
     int numrows;
@@ -272,6 +273,17 @@ void editorOpen(char* filename)
 
 
 /*** output ***/
+// check if cursor moved outside of screen, if so, adjust E.rowoff so that cursor is inside visible window
+void editorScroll() {
+    // check if cursor is above the visible window
+    if (E.cy < E.rowoff)
+        E.rowoff = E.cy;
+
+    // check if cursor is past the bottom of the visible window
+    if (E.cy >= E.rowoff + E.screenrows)
+        E.rowoff = E.cy - E.screenrows + 1; // since E.rowoff refers to top of the screen
+}
+
 // handle drawing each row of buffer of text being edited
 void editorDrawRows(struct abuf* ab)
 {
@@ -279,7 +291,9 @@ void editorDrawRows(struct abuf* ab)
 
     for (y = 0; y < E.screenrows; y++) 
     {
-        if (y >= E.numrows)
+        int filerow = y + E.rowoff; // for displaying the row of the file at y position
+
+        if (filerow >= E.numrows)
         {
             if (E.numrows == 0 && y == E.screenrows / 3)
             {
@@ -305,9 +319,9 @@ void editorDrawRows(struct abuf* ab)
         }
         else 
         {
-            int len = E.row[y].size;
+            int len = E.row[filerow].size;
             if (len > E.screencols) len = E.screencols;
-            abAppend(ab, E.row[y].chars, len);
+            abAppend(ab, E.row[filerow].chars, len);
         }
 
         abAppend(ab, "\x1b[K", 3);
@@ -322,6 +336,8 @@ void editorDrawRows(struct abuf* ab)
 // writing an escape sequence to the terminal
 void editorRefreshScreen() 
 {
+    editorScroll();
+
     struct abuf ab = ABUF_INIT;
 
     abAppend(&ab, "\x1b[?25l", 6);
@@ -357,7 +373,7 @@ void editorMoveCursor(int key)
                 E.cy--;
             break;
         case ARROW_DOWN:
-            if (E.cy != E.screenrows - 1)
+            if (E.cy < E.numrows)
                 E.cy++;
             break;
     }
@@ -408,6 +424,7 @@ void initEditor()
 {
     E.cx = 0;
     E.cy = 0;
+    E.rowoff = 0;
     E.numrows = 0;
     E.row = NULL;
 
