@@ -448,6 +448,22 @@ void editorDrawStatusBar(struct abuf* ab)
     }
     
     abAppend(ab, "\x1b[m", 3);
+    abAppend(ab, "\r\n", 2); // new line (for second status bar)
+}
+
+/*
+  Clear message bar with '[K' escape sequence
+  Make sure the message will fit the width of the screen, then display the message (only if the message is less than 5 seconds old)
+*/
+void editorDrawMessageBar(struct abuf* ab) 
+{
+    abAppend(ab, "\x1b[K", 3);
+
+    int msglen = strlen(E.statusmsg);
+
+    if (msglen > E.screencols) msglen = E.screencols;
+    if (msglen && time(NULL) - E.statusmsg_time < 5)
+        abAppend(ab, E.statusmsg, msglen);
 }
 
 // writing an escape sequence to the terminal
@@ -462,6 +478,7 @@ void editorRefreshScreen()
 
     editorDrawRows(&ab);
     editorDrawStatusBar(&ab);
+    editorDrawMessageBar(&ab);
 
     char buf[32];
     snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, (E.rx - E.coloff) + 1); // reposition the cursor by subtracting rowoff with cy and coloff with cx
@@ -606,7 +623,7 @@ void initEditor()
     E.statusmsg_time = 0;
 
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
-    E.screenrows -= 1; // so that editorDrawRows() doesn’t try to draw a line of text at the bottom of the screen
+    E.screenrows -= 2; // so that editorDrawRows() doesn’t try to draw a line of text at the bottom of the screen (- 2 for 2 rows)
 }
 
 int main(int argc, char* argv[]) 
