@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <termios.h>
+#include <sys/ioctl.h>
 
 
 /*** defines ***/
@@ -13,6 +14,15 @@
 /*** data ***/
 struct termios orig_termios;
 
+struct editorConfig // contains editor state
+{
+	int scrn_rows;
+	int scrn_cols;
+	struct termios orig_termios;	
+};
+
+struct editorConfig E;
+
 
 /*** function prototypes ***/
 void enableRawMode();
@@ -20,12 +30,15 @@ void disableRawMode();
 void die(const char* s);
 void editorProcessKeypress();
 void editorRefreshScreen();
+int getWindowSize(int* rows, int* cols);
+void initEditor();
 
 
 /*** main ***/
 int main()
 {
-	enableRawMode();	
+	enableRawMode();
+	initEditor();
 
 	while (1)
 	{
@@ -36,20 +49,25 @@ int main()
 	return 0;
 }
 
+void initEditor()
+{
+	if (getWindowSize(&E.scrn_rows, &E.scrn_cols) == -1) die("getWindowSize");
+}
+
 
 /*** terminal ***/
 void disableRawMode()
 {
-	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1)
+	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
 		die("tcsetattr");
 }
 
 void enableRawMode()
 {
-	if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) die("tcgetattr");
+	if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1) die("tcgetattr");
 	atexit(disableRawMode); // called automatically when program exits
 
-	struct termios raw = orig_termios;
+	struct termios raw = E.orig_termios;
 
 	// ICANON turns off canonical mode (allow reading input byte by byte instead of line by line)
 	// ISIG turns off signals from Ctrl-C and Ctrl-Z
@@ -82,6 +100,22 @@ void die(const char* s)
 	exit(1);
 }
 
+// getting window size
+int getWindowSize(int* rows, int* cols)
+{
+	struct winsize ws;
+
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0)
+		return -1;
+	else
+	{
+		*cols = ws.ws_col;
+		*rows = ws.ws_row;
+		
+		return 0;
+	}
+}
+
 // wait for 1 keypress, then return it. deals with low-level terminal input
 char editorReadKey()
 {
@@ -106,6 +140,8 @@ void editorProcessKeypress()
 	switch (c) 
 	{
 		case CTRL_KEY('q'):
+			write(STDOUT_FILENO, "\x1b[2J", 4);
+			write(STDOUT_FILENO, "\x1b[H", 3); // position the cursor
 			exit(0);
 			break;
 	}
@@ -113,9 +149,22 @@ void editorProcessKeypress()
 
 
 /*** output ***/
+// handle drawing each row of buffer of text being edited
+void editorDrawRows()
+{
+	for (int y = 0; y < E.scrn_rows; y++)
+	{
+		write(STDOUT_FILENO, "~\r\n", 3);
+	}
+}
+
 // writing an escape sequence to the terminal
 void editorRefreshScreen()
 {
 	write(STDOUT_FILENO, "\x1b[2J", 4);
 	write(STDOUT_FILENO, "\x1b[H", 3); // position the cursor
+
+	editorDrawRows();
+
+	write(STDOUT_FILENO, "\x1b[H", 3);
 }
