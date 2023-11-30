@@ -76,6 +76,8 @@ struct editorConfig E;
 
 /*** function prototypes ***/
 void editorSetStatusMessage(const char* fmt, ...);
+void editorRefreshScreen();
+char* editorPrompt(char* prompt);
 
 /*** terminal ***/
 // error handling (print out error if function returns -1)
@@ -528,7 +530,7 @@ void editorOpen(char* filename)
 }
 
 /*
-  New file: return for now (COME BACK LATER)
+  New file: prompt for "Save as: "
   else: 
   Call editorRowsToString(), and write() the string to the path in E.filename.
   Tell open() we want to create a new file if it doesn’t already exist (O_CREAT), and we want to open it for reading and writing (O_RDWR).
@@ -544,7 +546,16 @@ void editorOpen(char* filename)
 */
 void editorSave()
 {
-    if (E.filename == NULL) return;
+    if (E.filename == NULL)
+    {
+        E.filename = editorPrompt("Save as: %s (ESC to cancel)");
+
+        if (E.filename == NULL) 
+        {
+            editorSetStatusMessage("Save aborted");
+            return;
+        }
+    }
 
     int len;
     char* buf = editorRowsToString(&len);
@@ -741,6 +752,64 @@ void editorSetStatusMessage(const char* fmt, ...)
 }
 
 /*** input ***/
+/*
+  The user’s input is stored in buf, which is a dynamically allocated string (empty).
+  We enter an infinite loop that repeatedly sets the status message, refreshes the screen, and waits for a keypress to handle.
+  The prompt is expected to be a format string containing a %s, which is where the user’s input will be displayed.
+
+  When the user presses Enter, and their input is not empty, the status message is cleared and their input is returned.
+  Otherwise, when they input a printable character, we append it to buf.
+  If buflen has reached the maximum capacity we allocated (stored in bufsize),
+  then we double bufsize and allocate that amount of memory before appending to buf.
+  We also make sure that buf ends with a \0 character,
+  because both editorSetStatusMessage() and the caller of editorPrompt() will use it to know where the string ends.
+*/
+char* editorPrompt(char* prompt)
+{
+    size_t bufsize = 128;
+    char* buf = malloc(bufsize);
+    size_t buflen = 0;
+    buf[0] = '\0';
+
+    while (1)
+    {
+        editorSetStatusMessage(prompt, buf);
+        editorRefreshScreen();
+
+        int c = editorReadKey();
+
+        if (c == DEL_KEY || c == CTRL_KEY('h') || c == BACKSPACE) // allow backspace in prompt
+        {
+            if (buflen != 0) buf[--buflen] = '\0';
+        }
+        else if (c == '\x1b') // When an input prompt is cancelled, we free() the buf ourselves and return NULL
+        {
+            editorSetStatusMessage("");
+            free(buf);
+            return NULL;
+        }
+        else if (c == '\r')
+        {
+            if (buflen != 0)
+            {
+                editorSetStatusMessage("");
+                return buf;
+            }
+        } 
+        else if (!iscntrl(c) && c < 128)
+        {
+            if (buflen == bufsize - 1)
+            {
+                bufsize *= 2;
+                buf = realloc(buf, bufsize);
+            }
+
+            buf[buflen++] = c;
+            buf[buflen] = '\0';
+        }
+    }
+}
+
 void editorMoveCursor(int key)
 {
     // check if cursor is on the line
