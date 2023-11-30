@@ -59,6 +59,7 @@ struct editorConfig
     int screencols;
     int numrows;
     erow* row; // array for storing multiple lines
+    char* filename;
     struct termios orig_termios;
 };
 
@@ -308,6 +309,10 @@ void editorAppendRow(char* s, size_t len)
 // for opening and reading file from disk
 void editorOpen(char* filename)
 {
+    // get file name
+    free(E.filename);
+    E.filename = strdup(filename); // get copy of filename
+
     FILE* fp = fopen(filename, "r");
     if (!fp) die("fopen");
 
@@ -404,16 +409,38 @@ void editorDrawRows(struct abuf* ab)
 }
 
 // escape sequence '[7m' switches to inverted colors, '[m' switches back to normal formatting
+/*
+  The current line is stored in E.cy, which we add 1 to since E.cy is 0-indexed.
+
+  After printing the first status string, we want to keep printing spaces until we get to the point where 
+  if we printed the second status string, it would end up against the right edge of the screen.
+
+  That happens when E.screencols - len is equal to the length of the second status string. 
+  At that point we print the status string and break out of the loop, as the entire status bar has now been printed.
+*/
 void editorDrawStatusBar(struct abuf* ab)
 {
     abAppend(ab, "\x1b[7m", 4);
 
-    int len = 0;
+    char status[80], rstatus[80];
+    int len = snprintf(status, sizeof(status), "%.20s - %d lines", E.filename ? E.filename : "[No Name]", E.numrows);
+    int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d", E.cy + 1, E.numrows);
+
+    if (len > E.screencols) len = E.screencols;
+    abAppend(ab, status, len);
 
     while (len < E.screencols)
     {
-        abAppend(ab, " ", 1);
-        len++;
+        if (E.screencols - len == rlen)
+        {
+            abAppend(ab, rstatus, rlen);
+            break;
+        }
+        else
+        {
+            abAppend(ab, " ", 1);
+            len++;
+        }
     }
     
     abAppend(ab, "\x1b[m", 3);
@@ -555,6 +582,7 @@ void initEditor()
     E.coloff = 0;
     E.numrows = 0;
     E.row = NULL;
+    E.filename = NULL;
 
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
     E.screenrows -= 1; // so that editorDrawRows() doesn’t try to draw a line of text at the bottom of the screen
