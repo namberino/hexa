@@ -406,6 +406,7 @@ void editorOpen(char* filename)
 
     free(line);
     fclose(fp);
+    E.dirty = 0;
 }
 
 /*
