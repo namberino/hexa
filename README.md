@@ -1,10 +1,15 @@
 # Hexa Text Editor
 
-A simple text editor, based on [antirez's kilo](https://github.com/antirez/kilo)
+A simple, terminal based text editor
 
-Usage: hexa `<filename>`
+Build: 
+- Unix: Run `make`
+- Window: My condolences
+
+Usage: `./hexa <filename>`
 
 Keys:
-
-- `Ctrl S`: Save or Save As
+- `Ctrl S`: Save/Save As
 - `Ctrl Q`: Quit
+
+This project was based on [antirez's kilo editor](https://github.com/antirez/kilo)
