@@ -1,4 +1,4 @@
 FLAGS = -Wall -Wextra -pedantic -std=c99
 
-hexa: hexa.c
+bin/hexa: hexa.c
 	gcc $(FLAGS) $< -o $@
